@@ -24,6 +24,7 @@ contract ChainRemit is Ownable, ReentrancyGuard {
 
     uint256 private nextRemittanceId;
 
+    // 50 basis points = 0.5%
     uint256 public feeBasisPoints = 50;
 
     uint256 public accumulatedFees;
@@ -41,6 +42,7 @@ contract ChainRemit is Ownable, ReentrancyGuard {
 
     constructor(address tokenAddress) Ownable(msg.sender) {
         require(tokenAddress != address(0), "Invalid token address");
+
         token = IERC20(tokenAddress);
     }
 
@@ -65,10 +67,25 @@ contract ChainRemit is Ownable, ReentrancyGuard {
         uint256 amount
     ) external nonReentrant returns (uint256) {
 
-        require(registeredUsers[msg.sender], "Sender not registered");
-        require(registeredUsers[recipient], "Recipient not registered");
-        require(recipient != address(0), "Invalid recipient");
-        require(amount > 0, "Amount must be greater than zero");
+        require(
+            recipient != address(0),
+            "Invalid recipient"
+        );
+
+        require(
+            registeredUsers[msg.sender],
+            "Sender not registered"
+        );
+
+        require(
+            registeredUsers[recipient],
+            "Recipient not registered"
+        );
+
+        require(
+            amount > 0,
+            "Amount must be greater than zero"
+        );
 
         uint256 fee = (amount * feeBasisPoints) / 10000;
 
@@ -105,33 +122,61 @@ contract ChainRemit is Ownable, ReentrancyGuard {
 
         return remittanceId;
     }
-    function withdraw(uint256 remittanceId) external nonReentrant {
 
-    Remittance storage remittance = remittances[remittanceId];
+    function withdraw(uint256 remittanceId)
+        external
+        nonReentrant
+    {
+        Remittance storage remittance = remittances[remittanceId];
 
-    require(
-        remittance.recipient == msg.sender,
-        "Not the recipient"
-    );
+        require(
+            remittance.recipient == msg.sender,
+            "Not the recipient"
+        );
 
-    require(
-        !remittance.completed,
-        "Already withdrawn"
-    );
+        require(
+            !remittance.completed,
+            "Already withdrawn"
+        );
 
-    uint256 amount = remittance.claimableAmount;
+        uint256 amount = remittance.claimableAmount;
 
-    require(
-        amount > 0,
-        "Nothing to withdraw"
-    );
+        require(
+            amount > 0,
+            "Nothing to withdraw"
+        );
 
-    remittance.completed = true;
-    remittance.claimableAmount = 0;
+        remittance.completed = true;
+        remittance.claimableAmount = 0;
 
-    require(
-        token.transfer(msg.sender, amount),
-        "Token transfer failed"
-    );
-}
+        require(
+            token.transfer(msg.sender, amount),
+            "Token transfer failed"
+        );
+    }
+
+    function withdrawFees(address recipient)
+        external
+        onlyOwner
+        nonReentrant
+    {
+        require(
+            recipient != address(0),
+            "Invalid recipient"
+        );
+
+        uint256 fees = accumulatedFees;
+
+        require(
+            fees > 0,
+            "No fees available"
+        );
+
+        accumulatedFees = 0;
+
+        require(
+            token.transfer(recipient, fees),
+            "Fee transfer failed"
+        );
+    }
 }
